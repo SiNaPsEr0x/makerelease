@@ -3,7 +3,7 @@ from tkinter import BooleanVar, StringVar, filedialog
 
 import customtkinter as ctk
 
-from src.makerelease import MakeRelease, constants
+from src.makerelease import MakeRelease, SearchCancelled, constants
 
 REPO_URL = "https://github.com/c137ricksanchez/makerelease"
 
@@ -37,6 +37,13 @@ TR = {
         "make_release": "Crea release!",
         "authors": "Autori: RickSanchez & Norman",
         "updates": "Controlla aggiornamenti ↗",
+        "tmdb_dialog_title": "Seleziona il titolo",
+        "tmdb_results": "Più risultati trovati su TheMovieDB — scegli quello corretto:",
+        "tmdb_none": "Nessun risultato trovato su TheMovieDB.",
+        "tmdb_manual": "...oppure inserisci manualmente un ID TMDB:",
+        "confirm": "Conferma",
+        "cancel": "Annulla",
+        "cancelled_msg": "Operazione annullata: nessun titolo selezionato.",
         "types": {
             "movie": "Film (file)",
             "movie_folder": "Film (cartella)",
@@ -61,6 +68,13 @@ TR = {
         "make_release": "Make Release!",
         "authors": "Authors: RickSanchez & Norman",
         "updates": "Check for updates ↗",
+        "tmdb_dialog_title": "Select the title",
+        "tmdb_results": "Multiple results found on TheMovieDB — pick the correct one:",
+        "tmdb_none": "No results found on TheMovieDB.",
+        "tmdb_manual": "...or enter a TMDB ID manually:",
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "cancelled_msg": "Cancelled: no title selected.",
         "types": {
             "movie": "Movie (File)",
             "movie_folder": "Movie (Folder)",
@@ -355,6 +369,82 @@ class MyApp(ctk.CTk):
             self.select_button.configure(text=TR[self.lang]["change_path"])
             self.selected_path_label.configure(text=file_path, text_color=("gray10", "gray90"))
 
+    def _choose_tmdb(self, candidates):
+        """Dialog di selezione del titolo TMDB; ritorna l'id (str) o None se annullato."""
+        t = TR[self.lang]
+        result = {"id": None}
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(t["tmdb_dialog_title"])
+        dialog.geometry("460x300")
+        dialog.transient(self)
+        dialog.grid_columnconfigure(0, weight=1)
+
+        # Mappa "Titolo (anno)" -> id TMDB
+        label_to_id = {f"{c['title']} ({c['year']})": c["id"] for c in candidates}
+
+        row = 0
+        if candidates:
+            ctk.CTkLabel(
+                dialog, text=t["tmdb_results"], font=self.font_body,
+                anchor="w", justify="left", wraplength=420,
+            ).grid(row=row, column=0, sticky="ew", padx=20, pady=(20, 6))
+            row += 1
+
+            var_choice = StringVar(value=next(iter(label_to_id)))
+            ctk.CTkOptionMenu(
+                dialog, variable=var_choice, values=list(label_to_id),
+                font=self.font_body, height=36, corner_radius=8, dynamic_resizing=False,
+            ).grid(row=row, column=0, sticky="ew", padx=20, pady=(0, 12))
+            row += 1
+        else:
+            var_choice = None
+            ctk.CTkLabel(
+                dialog, text=t["tmdb_none"], font=self.font_body,
+                anchor="w", justify="left", wraplength=420,
+            ).grid(row=row, column=0, sticky="ew", padx=20, pady=(20, 6))
+            row += 1
+
+        ctk.CTkLabel(
+            dialog, text=t["tmdb_manual"], font=self.font_small,
+            text_color=self.color_muted, anchor="w",
+        ).grid(row=row, column=0, sticky="ew", padx=20, pady=(0, 2))
+        row += 1
+        manual_entry = ctk.CTkEntry(dialog, placeholder_text="es. 27205", height=36, corner_radius=8)
+        manual_entry.grid(row=row, column=0, sticky="ew", padx=20, pady=(0, 16))
+        row += 1
+
+        def confirm():
+            manual = manual_entry.get().strip()
+            if manual.isdigit():
+                result["id"] = manual
+            elif var_choice is not None:
+                result["id"] = label_to_id[var_choice.get()]
+            dialog.destroy()
+
+        def cancel():
+            result["id"] = None
+            dialog.destroy()
+
+        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        buttons.grid(row=row, column=0, sticky="ew", padx=20, pady=(0, 16))
+        buttons.grid_columnconfigure((0, 1), weight=1)
+        ctk.CTkButton(
+            buttons, text=t["cancel"], command=cancel, height=38, corner_radius=8,
+            fg_color="transparent", border_width=1, border_color=("gray65", "gray40"),
+            text_color=("gray10", "gray90"), hover_color=("gray90", "gray25"),
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ctk.CTkButton(
+            buttons, text=t["confirm"], command=confirm, height=38, corner_radius=8, font=self.font_cta
+        ).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+
+        dialog.protocol("WM_DELETE_WINDOW", cancel)
+        dialog.update()
+        dialog.lift()
+        dialog.grab_set()
+        self.wait_window(dialog)
+        return result["id"]
+
     def make_release(self, debug: bool = False):
         if debug:
             print(
@@ -373,8 +463,12 @@ class MyApp(ctk.CTk):
             path=self.selected_path.get(),
             id=self.var_idtmdb.get(),
             template=self._template_value,
+            chooser=self._choose_tmdb,
         )
-        releaser.make_release()
+        try:
+            releaser.make_release()
+        except SearchCancelled:
+            print(TR[self.lang]["cancelled_msg"])
 
 
 if __name__ == "__main__":

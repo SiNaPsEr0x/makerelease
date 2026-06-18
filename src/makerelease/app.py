@@ -27,11 +27,13 @@ def parse_release_type(type_str: str) -> ReleaseType:
 
 
 class MakeRelease:
-    def __init__(self, crew: str, rename: bool, type: str, path: str, id: str, template: str = None):
+    def __init__(self, crew: str, rename: bool, type: str, path: str, id: str, template: str = None, chooser=None):
         self.crew = crew
         self.rename = rename
         self.type = parse_release_type(type)
         self.id = id
+        # Callback per la selezione del titolo TMDB; None = selezione da console (CLI)
+        self.chooser = chooser
 
         # template=None -> usa tutti i template presenti in config/ (comportamento storico)
         if template is not None and template not in constants.templates:
@@ -124,7 +126,7 @@ class MakeRelease:
         if self.id and metadata.is_tmdb_id(self.id):
             movie_id = self.id
         else:
-            movie_id = metadata.search(title, year, self.type_id)
+            movie_id = metadata.search(title, year, self.type_id, self.chooser)
 
         data = metadata.get(movie_id, self.type_id)
 
